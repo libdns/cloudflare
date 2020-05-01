@@ -49,63 +49,63 @@ type cfZone struct {
 }
 
 type cfDNSRecord struct {
-	ID         string    `json:"id"`
-	Type       string    `json:"type"`
-	Name       string    `json:"name"`
-	Content    string    `json:"content"`
-	Proxiable  bool      `json:"proxiable"`
-	Proxied    bool      `json:"proxied"`
-	TTL        int       `json:"ttl"` // seconds
-	Locked     bool      `json:"locked"`
-	ZoneID     string    `json:"zone_id"`
-	ZoneName   string    `json:"zone_name"`
-	CreatedOn  time.Time `json:"created_on"`
-	ModifiedOn time.Time `json:"modified_on"`
-	Data       struct {
+	ID         string    `json:"id,omitempty"`
+	Type       string    `json:"type,omitempty"`
+	Name       string    `json:"name,omitempty"`
+	Content    string    `json:"content,omitempty"`
+	Proxiable  bool      `json:"proxiable,omitempty"`
+	Proxied    bool      `json:"proxied,omitempty"`
+	TTL        int       `json:"ttl,omitempty"` // seconds
+	Locked     bool      `json:"locked,omitempty"`
+	ZoneID     string    `json:"zone_id,omitempty"`
+	ZoneName   string    `json:"zone_name,omitempty"`
+	CreatedOn  time.Time `json:"created_on,omitempty"`
+	ModifiedOn time.Time `json:"modified_on,omitempty"`
+	Data       *struct {
 		// LOC
-		LatDegrees    int    `json:"lat_degrees"`
-		LatMinutes    int    `json:"lat_minutes"`
-		LatSeconds    int    `json:"lat_seconds"`
-		LatDirection  string `json:"lat_direction"`
-		LongDegrees   int    `json:"long_degrees"`
-		LongMinutes   int    `json:"long_minutes"`
-		LongSeconds   int    `json:"long_seconds"`
-		LongDirection string `json:"long_direction"`
-		Altitude      int    `json:"altitude"`
-		Size          int    `json:"size"`
-		PrecisionHorz int    `json:"precision_horz"`
-		PrecisionVert int    `json:"precision_vert"`
+		LatDegrees    int    `json:"lat_degrees,omitempty"`
+		LatMinutes    int    `json:"lat_minutes,omitempty"`
+		LatSeconds    int    `json:"lat_seconds,omitempty"`
+		LatDirection  string `json:"lat_direction,omitempty"`
+		LongDegrees   int    `json:"long_degrees,omitempty"`
+		LongMinutes   int    `json:"long_minutes,omitempty"`
+		LongSeconds   int    `json:"long_seconds,omitempty"`
+		LongDirection string `json:"long_direction,omitempty"`
+		Altitude      int    `json:"altitude,omitempty"`
+		Size          int    `json:"size,omitempty"`
+		PrecisionHorz int    `json:"precision_horz,omitempty"`
+		PrecisionVert int    `json:"precision_vert,omitempty"`
 
 		// SRV
-		Service  string `json:"service"`
-		Proto    string `json:"proto"`
-		Name     string `json:"name"`
-		Priority int    `json:"priority"`
-		Weight   int    `json:"weight"`
-		Port     int    `json:"port"`
-		Target   string `json:"target"`
+		Service  string `json:"service,omitempty"`
+		Proto    string `json:"proto,omitempty"`
+		Name     string `json:"name,omitempty"`
+		Priority int    `json:"priority,omitempty"`
+		Weight   int    `json:"weight,omitempty"`
+		Port     int    `json:"port,omitempty"`
+		Target   string `json:"target,omitempty"`
 
 		// DNSKEY
-		Flags     int `json:"flags"`
-		Protocol  int `json:"protocol"`
-		Algorithm int `json:"algorithm"`
+		Flags     int `json:"flags,omitempty"`
+		Protocol  int `json:"protocol,omitempty"`
+		Algorithm int `json:"algorithm,omitempty"`
 
 		// DS
-		KeyTag     int `json:"key_tag"`
-		DigestType int `json:"digest_type"`
+		KeyTag     int `json:"key_tag,omitempty"`
+		DigestType int `json:"digest_type,omitempty"`
 
 		// TLSA
-		Usage        int `json:"usage"`
-		Selector     int `json:"selector"`
-		MatchingType int `json:"matching_type"`
+		Usage        int `json:"usage,omitempty"`
+		Selector     int `json:"selector,omitempty"`
+		MatchingType int `json:"matching_type,omitempty"`
 
 		// URI
-		Content string `json:"content"`
-	} `json:"data"`
-	Meta struct {
-		AutoAdded bool   `json:"auto_added"`
-		Source    string `json:"source"`
-	} `json:"meta"`
+		Content string `json:"content,omitempty"`
+	} `json:"data,omitempty"`
+	Meta *struct {
+		AutoAdded bool   `json:"auto_added,omitempty"`
+		Source    string `json:"source,omitempty"`
+	} `json:"meta,omitempty"`
 }
 
 func (r cfDNSRecord) libdnsRecord() libdns.Record {
