@@ -131,27 +131,31 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 
 	var results []libdns.Record
 	for _, rec := range records {
+		oldRec := cloudflareRecord(rec)
+		oldRec.ZoneID = zoneInfo.ID
 		if rec.ID == "" {
 			// the record might already exist, even if we don't know the ID yet
 			matches, err := p.getDNSRecords(ctx, zoneInfo, rec, false)
 			if err != nil {
 				return nil, err
 			}
-			if len(matches) > 0 {
-				for _, match := range matches {
-					// record exists; update it
-					result, err := p.updateRecord(ctx, match, cloudflareRecord(rec))
-					if err != nil {
-						return nil, err
-					}
-					results = append(results, result.libdnsRecord())
+			if len(matches) == 0 {
+				// record doesn't exist; create it
+				result, err := p.createRecord(ctx, zoneInfo, rec)
+				if err != nil {
+					return nil, err
 				}
+				results = append(results, result.libdnsRecord())
 				continue
 			}
+			if len(matches) > 1 {
+				return nil, fmt.Errorf("unexpectedly found more than 1 record for %v", rec)
+			}
+			// record does exist, fill in the ID so that we can update it
+			oldRec.ID = matches[0].ID
 		}
-
-		// record doesn't exist; create it
-		result, err := p.createRecord(ctx, zoneInfo, rec)
+		// record exists; update it
+		result, err := p.updateRecord(ctx, oldRec, cloudflareRecord(rec))
 		if err != nil {
 			return nil, err
 		}
