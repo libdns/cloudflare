@@ -44,7 +44,7 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 
 	recs := make([]libdns.Record, 0, len(result))
 	for _, rec := range result {
-		recs = append(recs, rec.libdnsRecord())
+		recs = append(recs, rec.libdnsRecord(zone))
 	}
 
 	return recs, nil
@@ -63,7 +63,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		if err != nil {
 			return nil, err
 		}
-		created = append(created, result.libdnsRecord())
+		created = append(created, result.libdnsRecord(zone))
 	}
 
 	return created, nil
@@ -94,7 +94,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 				return nil, err
 			}
 			for _, rec := range exactMatches {
-				deleteQueue = append(deleteQueue, rec.libdnsRecord())
+				deleteQueue = append(deleteQueue, rec.libdnsRecord(zone))
 			}
 		} else {
 			deleteQueue = []libdns.Record{rec}
@@ -113,7 +113,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 				return nil, err
 			}
 
-			recs = append(recs, result.libdnsRecord())
+			recs = append(recs, result.libdnsRecord(zone))
 		}
 
 	}
@@ -145,7 +145,7 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 				if err != nil {
 					return nil, err
 				}
-				results = append(results, result.libdnsRecord())
+				results = append(results, result.libdnsRecord(zone))
 				continue
 			}
 			if len(matches) > 1 {
@@ -159,7 +159,7 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, result.libdnsRecord())
+		results = append(results, result.libdnsRecord(zone))
 	}
 
 	return results, nil

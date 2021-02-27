@@ -18,7 +18,7 @@ func (p *Provider) createRecord(ctx context.Context, zoneInfo cfZone, record lib
 	}
 
 	reqURL := fmt.Sprintf("%s/zones/%s/dns_records", baseURL, zoneInfo.ID)
-	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(jsonBytes))
 	if err != nil {
 		return cfDNSRecord{}, err
 	}
@@ -43,7 +43,7 @@ func (p *Provider) updateRecord(ctx context.Context, oldRec, newRec cfDNSRecord)
 	}
 
 	// PATCH changes only the populated fields; PUT resets Type, Name, Content, and TTL even if empty
-	req, err := http.NewRequestWithContext(ctx, "PATCH", reqURL, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, reqURL, bytes.NewReader(jsonBytes))
 	if err != nil {
 		return cfDNSRecord{}, err
 	}
@@ -57,13 +57,13 @@ func (p *Provider) updateRecord(ctx context.Context, oldRec, newRec cfDNSRecord)
 func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdns.Record, matchContent bool) ([]cfDNSRecord, error) {
 	qs := make(url.Values)
 	qs.Set("type", rec.Type)
-	qs.Set("name", rec.Name)
+	qs.Set("name", libdns.AbsoluteName(rec.Name, zoneInfo.Name))
 	if matchContent {
 		qs.Set("content", rec.Value)
 	}
 
 	reqURL := fmt.Sprintf("%s/zones/%s/dns_records?%s", baseURL, zoneInfo.ID, qs.Encode())
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (p *Provider) getZoneInfo(ctx context.Context, zoneName string) (cfZone, er
 	qs.Set("name", zoneName)
 	reqURL := fmt.Sprintf("%s/zones?%s", baseURL, qs.Encode())
 
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return cfZone{}, err
 	}
