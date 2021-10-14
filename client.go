@@ -17,6 +17,8 @@ func (p *Provider) createRecord(ctx context.Context, zoneInfo cfZone, record lib
 		return cfDNSRecord{}, err
 	}
 
+	fmt.Printf("json: %s", string(jsonBytes))
+
 	reqURL := fmt.Sprintf("%s/zones/%s/dns_records", baseURL, zoneInfo.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(jsonBytes))
 	if err != nil {
