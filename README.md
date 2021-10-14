@@ -1,9 +1,15 @@
 Cloudflare for `libdns`
 =======================
 
-[![godoc reference](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/libdns/cloudflare)
+[![godoc reference](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/caiych/cloudflare)
 
 This package implements the [libdns interfaces](https://github.com/libdns/libdns) for [Cloudflare](https://www.cloudflare.com).
+
+## caiych fork
+
+This caiych's fork tries to let Cloudflare do proxying when it's reasonable(A and AAAA).
+
+This is useful if you use this libaray in conjunction with [caddy-dynamicdns](https://github.com/mholt/caddy-dynamicdns)
 
 ## Authenticating
 
