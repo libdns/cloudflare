@@ -2,6 +2,7 @@ package cloudflare
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/libdns/libdns"
@@ -61,7 +62,7 @@ type cfDNSRecord struct {
 	ZoneName   string    `json:"zone_name,omitempty"`
 	CreatedOn  time.Time `json:"created_on,omitempty"`
 	ModifiedOn time.Time `json:"modified_on,omitempty"`
-	Data       *struct {
+	Data       struct {
 		// LOC
 		LatDegrees    int    `json:"lat_degrees,omitempty"`
 		LatMinutes    int    `json:"lat_minutes,omitempty"`
@@ -80,9 +81,9 @@ type cfDNSRecord struct {
 		Service  string `json:"service,omitempty"`
 		Proto    string `json:"proto,omitempty"`
 		Name     string `json:"name,omitempty"`
-		Priority int    `json:"priority,omitempty"`
-		Weight   int    `json:"weight,omitempty"`
-		Port     int    `json:"port,omitempty"`
+		Priority uint   `json:"priority,omitempty"`
+		Weight   uint   `json:"weight,omitempty"`
+		Port     uint   `json:"port,omitempty"`
 		Target   string `json:"target,omitempty"`
 
 		// DNSKEY
@@ -109,6 +110,18 @@ type cfDNSRecord struct {
 }
 
 func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
+	if r.Type == "SRV" {
+		srv := libdns.SRV{
+			Service:  strings.TrimPrefix(r.Data.Service, "_"),
+			Proto:    strings.TrimPrefix(r.Data.Proto, "_"),
+			Name:     r.Data.Name,
+			Priority: r.Data.Priority,
+			Weight:   r.Data.Weight,
+			Port:     r.Data.Port,
+			Target:   r.Data.Target,
+		}
+		return srv.ToRecord()
+	}
 	return libdns.Record{
 		Type:  r.Type,
 		Name:  libdns.RelativeName(r.Name, zone),
@@ -118,14 +131,29 @@ func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
 	}
 }
 
-func cloudflareRecord(r libdns.Record) cfDNSRecord {
-	return cfDNSRecord{
-		ID:      r.ID,
-		Type:    r.Type,
-		Name:    r.Name,
-		Content: r.Value,
-		TTL:     int(r.TTL.Seconds()),
+func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
+	rec := cfDNSRecord{
+		ID:   r.ID,
+		Type: r.Type,
+		TTL:  int(r.TTL.Seconds()),
 	}
+	if r.Type == "SRV" {
+		srv, err := r.ToSRV()
+		if err != nil {
+			return cfDNSRecord{}, err
+		}
+		rec.Data.Service = "_" + srv.Service
+		rec.Data.Priority = srv.Priority
+		rec.Data.Weight = srv.Weight
+		rec.Data.Proto = "_" + srv.Proto
+		rec.Data.Name = srv.Name
+		rec.Data.Port = srv.Port
+		rec.Data.Target = srv.Target
+	} else {
+		rec.Name = r.Name
+		rec.Content = r.Value
+	}
+	return rec, nil
 }
 
 // All API responses have this structure.
@@ -133,10 +161,14 @@ type cfResponse struct {
 	Result  json.RawMessage `json:"result,omitempty"`
 	Success bool            `json:"success"`
 	Errors  []struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code       int    `json:"code"`
+		Message    string `json:"message"`
+		ErrorChain []struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error_chain,omitempty"`
 	} `json:"errors,omitempty"`
-	Messages   []interface{} `json:"messages,omitempty"`
+	Messages   []any         `json:"messages,omitempty"`
 	ResultInfo *cfResultInfo `json:"result_info,omitempty"`
 }
 

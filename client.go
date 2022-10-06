@@ -12,7 +12,11 @@ import (
 )
 
 func (p *Provider) createRecord(ctx context.Context, zoneInfo cfZone, record libdns.Record) (cfDNSRecord, error) {
-	jsonBytes, err := json.Marshal(cloudflareRecord(record))
+	cfRec, err := cloudflareRecord(record)
+	if err != nil {
+		return cfDNSRecord{}, err
+	}
+	jsonBytes, err := json.Marshal(cfRec)
 	if err != nil {
 		return cfDNSRecord{}, err
 	}

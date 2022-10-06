@@ -131,7 +131,10 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 
 	var results []libdns.Record
 	for _, rec := range records {
-		oldRec := cloudflareRecord(rec)
+		oldRec, err := cloudflareRecord(rec)
+		if err != nil {
+			return nil, err
+		}
 		oldRec.ZoneID = zoneInfo.ID
 		if rec.ID == "" {
 			// the record might already exist, even if we don't know the ID yet
@@ -155,7 +158,11 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 			oldRec.ID = matches[0].ID
 		}
 		// record exists; update it
-		result, err := p.updateRecord(ctx, oldRec, cloudflareRecord(rec))
+		cfRec, err := cloudflareRecord(rec)
+		if err != nil {
+			return nil, err
+		}
+		result, err := p.updateRecord(ctx, oldRec, cfRec)
 		if err != nil {
 			return nil, err
 		}
