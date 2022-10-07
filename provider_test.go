@@ -148,7 +148,7 @@ func TestMailRecords(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recs, err := p.SetRecords(ctx, zone, []libdns.Record{tt.rec})
+			recs, err := p.AppendRecords(ctx, zone, []libdns.Record{tt.rec})
 			if err != nil {
 				if !tt.wantErr {
 					t.Errorf("SetRecords() error = %v, wantErr %v", err, tt.wantErr)
