@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/libdns/libdns"
 )
@@ -61,7 +62,7 @@ func (p *Provider) updateRecord(ctx context.Context, oldRec, newRec cfDNSRecord)
 func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdns.Record, matchContent bool) ([]cfDNSRecord, error) {
 	qs := make(url.Values)
 	qs.Set("type", rec.Type)
-	qs.Set("name", libdns.AbsoluteName(rec.Name, zoneInfo.Name))
+	qs.Set("name", libdns.AbsoluteName(strings.TrimSuffix(rec.Name, zoneInfo.Name), zoneInfo.Name))
 	if matchContent {
 		qs.Set("content", rec.Value)
 	}
