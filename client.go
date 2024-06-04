@@ -98,6 +98,9 @@ func (p *Provider) getZoneInfo(ctx context.Context, zoneName string) (cfZone, er
 		return cfZone{}, err
 	}
 
+	if p.ZoneToken != "" {
+		req.Header.Set("Authorization", "Bearer "+p.ZoneToken)
+	}
 	var zones []cfZone
 	_, err = p.doAPIRequest(req, &zones)
 	if err != nil {
@@ -113,13 +116,15 @@ func (p *Provider) getZoneInfo(ctx context.Context, zoneName string) (cfZone, er
 	return zones[0], nil
 }
 
-// doAPIRequest authenticates the request req and does the round trip. It returns
-// the decoded response from Cloudflare if successful; otherwise it returns an
+// doAPIRequest does the round trip, adding Authorization header if not already supplied.
+// It returns the decoded response from Cloudflare if successful; otherwise it returns an
 // error including error information from the API if applicable. If result is a
 // non-nil pointer, the result field from the API response will be decoded into
 // it for convenience.
 func (p *Provider) doAPIRequest(req *http.Request, result interface{}) (cfResponse, error) {
-	req.Header.Set("Authorization", "Bearer "+p.APIToken)
+	if req.Header.Get("Authorization") == "" {
+		req.Header.Set("Authorization", "Bearer "+p.APIToken)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

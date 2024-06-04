@@ -12,12 +12,10 @@ import (
 // Provider implements the libdns interfaces for Cloudflare.
 // TODO: Support pagination and retries, handle rate limits.
 type Provider struct {
-	// API token is used for authentication. Make sure to use a
-	// scoped API **token**, NOT a global API **key**. It will
-	// need two permissions: Zone-Zone-Read and Zone-DNS-Edit,
-	// unless you are only using `GetRecords()`, in which case
-	// the second can be changed to Read.
-	APIToken string `json:"api_token,omitempty"`
+	// API tokens are used for authentication. Make sure to use
+	// scoped API **tokens**, NOT a global API **key**.
+	APIToken  string `json:"api_token,omitempty"`  // API token with Zone.DNS:Write (can be scoped to single Zone if ZoneToken is also provided)
+	ZoneToken string `json:"zone_token,omitempty"` // Optional Zone:Read token (global scope)
 
 	zones   map[string]cfZone
 	zonesMu sync.Mutex
