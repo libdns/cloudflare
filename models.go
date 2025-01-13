@@ -149,6 +149,10 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 		rec.Data.Name = srv.Name
 		rec.Data.Port = srv.Port
 		rec.Data.Target = srv.Target
+	} else if r.Type == "TXT" {
+		// make sure the content is wrapped in quotes
+		rec.Name = r.Name
+		rec.Content = `"` + strings.Trim(r.Value, `"`) + `"`
 	} else {
 		rec.Name = r.Name
 		rec.Content = r.Value
