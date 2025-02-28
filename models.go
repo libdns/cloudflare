@@ -111,7 +111,8 @@ type cfDNSRecord struct {
 }
 
 func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
-	if r.Type == "SRV" {
+	switch r.Type {
+	case "SRV":
 		srv := libdns.SRV{
 			Service:  strings.TrimPrefix(r.Data.Service, "_"),
 			Proto:    strings.TrimPrefix(r.Data.Proto, "_"),
@@ -122,6 +123,16 @@ func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
 			Target:   r.Data.Target,
 		}
 		return srv.ToRecord()
+	case "HTTPS":
+		return libdns.Record{
+			Type:     r.Type,
+			Name:     r.Data.Name,
+			Value:    r.Data.Value,
+			TTL:      time.Duration(r.TTL) * time.Second,
+			ID:       r.ID,
+			Priority: r.Data.Priority,
+			Target:   r.Data.Target,
+		}
 	}
 	return libdns.Record{
 		Type:  r.Type,
