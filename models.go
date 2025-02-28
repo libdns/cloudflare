@@ -2,7 +2,6 @@ package cloudflare
 
 import (
 	"encoding/json"
-	"log"
 	"strings"
 	"time"
 
@@ -112,7 +111,6 @@ type cfDNSRecord struct {
 }
 
 func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
-	log.Printf("CF RECORD: %+v", r)
 	if r.Type == "SRV" {
 		srv := libdns.SRV{
 			Service:  strings.TrimPrefix(r.Data.Service, "_"),
