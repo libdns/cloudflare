@@ -2,6 +2,7 @@ package cloudflare
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -111,8 +112,8 @@ type cfDNSRecord struct {
 }
 
 func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
-	switch r.Type {
-	case "SRV":
+	log.Printf("CF RECORD: %+v", r)
+	if r.Type == "SRV" {
 		srv := libdns.SRV{
 			Service:  strings.TrimPrefix(r.Data.Service, "_"),
 			Proto:    strings.TrimPrefix(r.Data.Proto, "_"),
@@ -123,24 +124,20 @@ func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
 			Target:   r.Data.Target,
 		}
 		return srv.ToRecord()
-	case "HTTPS":
-		return libdns.Record{
-			Type:     r.Type,
-			Name:     r.Data.Name,
-			Value:    r.Data.Value,
-			TTL:      time.Duration(r.TTL) * time.Second,
-			ID:       r.ID,
-			Priority: r.Data.Priority,
-			Target:   r.Data.Target,
-		}
 	}
-	return libdns.Record{
+	rec := libdns.Record{
 		Type:  r.Type,
 		Name:  libdns.RelativeName(r.Name, zone),
 		Value: r.Content,
 		TTL:   time.Duration(r.TTL) * time.Second,
 		ID:    r.ID,
 	}
+	if r.Type == "HTTPS" {
+		rec.Value = r.Data.Value
+		rec.Priority = r.Data.Priority
+		rec.Target = r.Data.Target
+	}
+	return rec
 }
 
 func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
