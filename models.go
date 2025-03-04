@@ -167,6 +167,9 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 		rec.Data.Priority = r.Priority
 		rec.Content = r.Value
 	}
+	if rec.Type == "CNAME" && strings.HasSuffix(rec.Content, ".cfargotunnel.com") {
+		rec.Proxied = true
+	}
 	return rec, nil
 }
 
