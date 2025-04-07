@@ -59,11 +59,13 @@ func (p *Provider) updateRecord(ctx context.Context, oldRec, newRec cfDNSRecord)
 }
 
 func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdns.Record, matchContent bool) ([]cfDNSRecord, error) {
+	rr := rec.RR()
+
 	qs := make(url.Values)
-	qs.Set("type", rec.Type)
-	qs.Set("name", libdns.AbsoluteName(rec.Name, zoneInfo.Name))
+	qs.Set("type", rr.Type)
+	qs.Set("name", libdns.AbsoluteName(rr.Name, zoneInfo.Name))
 	if matchContent {
-		qs.Set("content", rec.Value)
+		qs.Set("content", rr.Data)
 	}
 
 	reqURL := fmt.Sprintf("%s/zones/%s/dns_records?%s", baseURL, zoneInfo.ID, qs.Encode())
@@ -121,7 +123,7 @@ func (p *Provider) getZoneInfo(ctx context.Context, zoneName string) (cfZone, er
 // error including error information from the API if applicable. If result is a
 // non-nil pointer, the result field from the API response will be decoded into
 // it for convenience.
-func (p *Provider) doAPIRequest(req *http.Request, result interface{}) (cfResponse, error) {
+func (p *Provider) doAPIRequest(req *http.Request, result any) (cfResponse, error) {
 	if req.Header.Get("Authorization") == "" {
 		req.Header.Set("Authorization", "Bearer "+p.APIToken)
 	}

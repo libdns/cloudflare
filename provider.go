@@ -3,6 +3,7 @@ package cloudflare
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 
@@ -42,8 +43,13 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 
 	recs := make([]libdns.Record, 0, len(result))
 	for _, rec := range result {
-		recs = append(recs, rec.libdnsRecord(zone))
+		libdnsRec, err := rec.libdnsRecord(zone)
+		if err != nil {
+			return nil, fmt.Errorf("parsing Cloudflare DNS record %+v: %v", rec, err)
+		}
+		recs = append(recs, libdnsRec)
 	}
+	log.Printf("GOT RECORDS: %#v", recs)
 
 	return recs, nil
 }
@@ -61,7 +67,11 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		if err != nil {
 			return nil, err
 		}
-		created = append(created, result.libdnsRecord(zone))
+		libdnsRec, err := result.libdnsRecord(zone)
+		if err != nil {
+			return nil, fmt.Errorf("parsing Cloudflare DNS record %+v: %v", rec, err)
+		}
+		created = append(created, libdnsRec)
 	}
 
 	return created, nil
@@ -77,29 +87,14 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 
 	var recs []libdns.Record
 	for _, rec := range records {
-		// we create a "delete queue" for each record
-		// requested for deletion; if the record ID
-		// is known, that is the only one to fill the
-		// queue, but if it's not known, we try to find
-		// a match theoretically there could be more
-		// than one
-		var deleteQueue []libdns.Record
-
-		if rec.ID == "" {
-			// record ID is required; try to find it with what was provided
-			exactMatches, err := p.getDNSRecords(ctx, zoneInfo, rec, true)
-			if err != nil {
-				return nil, err
-			}
-			for _, rec := range exactMatches {
-				deleteQueue = append(deleteQueue, rec.libdnsRecord(zone))
-			}
-		} else {
-			deleteQueue = []libdns.Record{rec}
+		// record ID is required; try to find it with what was provided
+		exactMatches, err := p.getDNSRecords(ctx, zoneInfo, rec, true)
+		if err != nil {
+			return nil, err
 		}
 
-		for _, delRec := range deleteQueue {
-			reqURL := fmt.Sprintf("%s/zones/%s/dns_records/%s", baseURL, zoneInfo.ID, delRec.ID)
+		for _, cfRec := range exactMatches {
+			reqURL := fmt.Sprintf("%s/zones/%s/dns_records/%s", baseURL, zoneInfo.ID, cfRec.ID)
 			req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 			if err != nil {
 				return nil, err
@@ -111,7 +106,11 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 				return nil, err
 			}
 
-			recs = append(recs, result.libdnsRecord(zone))
+			libdnsRec, err := result.libdnsRecord(zone)
+			if err != nil {
+				return nil, fmt.Errorf("parsing Cloudflare DNS record %+v: %v", rec, err)
+			}
+			recs = append(recs, libdnsRec)
 		}
 
 	}
@@ -134,27 +133,31 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 			return nil, err
 		}
 		oldRec.ZoneID = zoneInfo.ID
-		if rec.ID == "" {
-			// the record might already exist, even if we don't know the ID yet
-			matches, err := p.getDNSRecords(ctx, zoneInfo, rec, false)
+
+		// the record might already exist, even if we don't know the ID yet
+		matches, err := p.getDNSRecords(ctx, zoneInfo, rec, false)
+		if err != nil {
+			return nil, err
+		}
+		if len(matches) == 0 {
+			// record doesn't exist; create it
+			result, err := p.createRecord(ctx, zoneInfo, rec)
 			if err != nil {
 				return nil, err
 			}
-			if len(matches) == 0 {
-				// record doesn't exist; create it
-				result, err := p.createRecord(ctx, zoneInfo, rec)
-				if err != nil {
-					return nil, err
-				}
-				results = append(results, result.libdnsRecord(zone))
-				continue
+			libdnsRec, err := result.libdnsRecord(zone)
+			if err != nil {
+				return nil, fmt.Errorf("parsing Cloudflare DNS record %+v: %v", rec, err)
 			}
-			if len(matches) > 1 {
-				return nil, fmt.Errorf("unexpectedly found more than 1 record for %v", rec)
-			}
-			// record does exist, fill in the ID so that we can update it
-			oldRec.ID = matches[0].ID
+			results = append(results, libdnsRec)
+			continue
 		}
+		if len(matches) > 1 {
+			return nil, fmt.Errorf("unexpectedly found more than 1 record for %v", rec)
+		}
+		// record does exist, fill in the ID so that we can update it
+		oldRec.ID = matches[0].ID
+
 		// record exists; update it
 		cfRec, err := cloudflareRecord(rec)
 		if err != nil {
@@ -164,7 +167,11 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, result.libdnsRecord(zone))
+		libdnsRec, err := result.libdnsRecord(zone)
+		if err != nil {
+			return nil, fmt.Errorf("parsing Cloudflare DNS record %+v: %v", rec, err)
+		}
+		results = append(results, libdnsRec)
 	}
 
 	return results, nil
