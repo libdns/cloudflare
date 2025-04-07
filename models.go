@@ -81,9 +81,9 @@ type cfDNSRecord struct {
 		Service  string `json:"service,omitempty"`
 		Proto    string `json:"proto,omitempty"`
 		Name     string `json:"name,omitempty"`
-		Priority uint   `json:"priority,omitempty"`
-		Weight   uint   `json:"weight,omitempty"`
-		Port     uint   `json:"port,omitempty"`
+		Priority uint16 `json:"priority,omitempty"`
+		Weight   uint16 `json:"weight,omitempty"`
+		Port     uint16 `json:"port,omitempty"`
 		Target   string `json:"target,omitempty"`
 		Value    string `json:"value,omitempty"`
 
@@ -110,67 +110,56 @@ type cfDNSRecord struct {
 	} `json:"meta,omitempty"`
 }
 
-func (r cfDNSRecord) libdnsRecord(zone string) libdns.Record {
-	if r.Type == "SRV" {
-		srv := libdns.SRV{
-			Service:  strings.TrimPrefix(r.Data.Service, "_"),
-			Proto:    strings.TrimPrefix(r.Data.Proto, "_"),
-			Name:     r.Data.Name,
-			Priority: r.Data.Priority,
-			Weight:   r.Data.Weight,
-			Port:     r.Data.Port,
-			Target:   r.Data.Target,
-		}
-		return srv.ToRecord()
-	}
-	rec := libdns.Record{
-		Type:  r.Type,
-		Name:  libdns.RelativeName(r.Name, zone),
-		Value: r.Content,
-		TTL:   time.Duration(r.TTL) * time.Second,
-		ID:    r.ID,
-	}
-	if r.Type == "HTTPS" {
-		rec.Value = r.Data.Value
-		rec.Priority = r.Data.Priority
-		rec.Target = r.Data.Target
-	}
-	return rec
+func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
+	return libdns.RR{
+		Name: libdns.RelativeName(r.Name, zone),
+		TTL:  time.Duration(r.TTL) * time.Second,
+		Type: r.Type,
+		Data: r.Content,
+	}.Parse()
 }
 
 func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
-	rec := cfDNSRecord{
-		ID:   r.ID,
-		Type: r.Type,
-		TTL:  int(r.TTL.Seconds()),
+	// Super annoyingly, the Cloudflare API says that a "Content"
+	// field can contain the record data as a string, and that the
+	// individual component fields are optional (this would be
+	// ideal so we don't have to parse every single record type
+	// into a separate struct, we can just submit the Content
+	// string like what the RR struct has for us); yet when I try
+	// to submit records using the Content field, I get errors
+	// saying that the individual data components are required,
+	// despite the docs saying they're optional.
+	// So, instead of a 5-line function, we have a much bigger
+	// more complicated and error prone function here.
+	// And of course there's no real good venue to file a bug report:
+	// https://community.cloudflare.com/t/creating-srv-record-with-content-string-instead-of-individual-component-fields/781178?u=mholt
+	rr := r.RR()
+	cfRec := cfDNSRecord{
+		// ID:   r.ID,
+		Name:    rr.Name,
+		Type:    rr.Type,
+		TTL:     int(rr.TTL.Seconds()),
+		Content: rr.Data,
 	}
-	switch r.Type {
-	case "SRV":
-		srv, err := r.ToSRV()
-		if err != nil {
-			return cfDNSRecord{}, err
-		}
-		rec.Data.Service = "_" + srv.Service
-		rec.Data.Priority = srv.Priority
-		rec.Data.Weight = srv.Weight
-		rec.Data.Proto = "_" + srv.Proto
-		rec.Data.Name = srv.Name
-		rec.Data.Port = srv.Port
-		rec.Data.Target = srv.Target
-	case "HTTPS":
-		rec.Name = r.Name
-		rec.Data.Priority = r.Priority
-		rec.Data.Target = r.Target
-		rec.Data.Value = r.Value
-	default:
-		rec.Name = r.Name
-		rec.Data.Priority = r.Priority
-		rec.Content = r.Value
+	switch rec := r.(type) {
+	case libdns.SRV:
+		cfRec.Data.Service = "_" + rec.Service
+		cfRec.Data.Priority = rec.Priority
+		cfRec.Data.Weight = rec.Weight
+		cfRec.Data.Proto = "_" + rec.Transport
+		cfRec.Data.Name = rec.Name
+		cfRec.Data.Port = rec.Port
+		cfRec.Data.Target = rec.Target
+	case libdns.ServiceBinding:
+		cfRec.Name = rec.Name
+		cfRec.Data.Priority = rec.Priority
+		cfRec.Data.Target = rec.Target
+		cfRec.Data.Value = rec.Params.String()
 	}
-	if rec.Type == "CNAME" && strings.HasSuffix(rec.Content, ".cfargotunnel.com") {
-		rec.Proxied = true
+	if rr.Type == "CNAME" && strings.HasSuffix(cfRec.Content, ".cfargotunnel.com") {
+		cfRec.Proxied = true
 	}
-	return rec, nil
+	return cfRec, nil
 }
 
 // All API responses have this structure.
