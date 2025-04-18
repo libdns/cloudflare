@@ -2,6 +2,8 @@ package cloudflare
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -54,6 +56,7 @@ type cfDNSRecord struct {
 	Type       string    `json:"type,omitempty"`
 	Name       string    `json:"name,omitempty"`
 	Content    string    `json:"content,omitempty"`
+	Priority   uint16    `json:"priority,omitempty"`
 	Proxiable  bool      `json:"proxiable,omitempty"`
 	Proxied    bool      `json:"proxied,omitempty"`
 	TTL        int       `json:"ttl,omitempty"` // seconds
@@ -85,10 +88,16 @@ type cfDNSRecord struct {
 		Weight   uint16 `json:"weight,omitempty"`
 		Port     uint16 `json:"port,omitempty"`
 		Target   string `json:"target,omitempty"`
-		Value    string `json:"value,omitempty"`
 
+		// CAA, SRV, HTTPS
+		Value string `json:"value,omitempty"`
+
+		// CAA
+		Tag string `json:"tag"`
+
+		// CAA, DNSKEY
+		Flags int `json:"flags,omitempty"`
 		// DNSKEY
-		Flags     int `json:"flags,omitempty"`
 		Protocol  int `json:"protocol,omitempty"`
 		Algorithm int `json:"algorithm,omitempty"`
 
@@ -105,18 +114,92 @@ type cfDNSRecord struct {
 		Content string `json:"content,omitempty"`
 	} `json:"data,omitempty"`
 	Meta *struct {
-		AutoAdded bool   `json:"auto_added,omitempty"`
-		Source    string `json:"source,omitempty"`
+		AutoAdded    bool   `json:"auto_added,omitempty"`
+		Source       string `json:"source,omitempty"`
+		EmailRouting bool   `json:"email_routing,omitempty"`
+		ReadOnly     bool   `json:"read_only,omitempty"`
 	} `json:"meta,omitempty"`
 }
 
 func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
-	return libdns.RR{
-		Name: libdns.RelativeName(r.Name, zone),
-		TTL:  time.Duration(r.TTL) * time.Second,
-		Type: r.Type,
-		Data: r.Content,
-	}.Parse()
+	name := libdns.RelativeName(r.Name, zone)
+	ttl := time.Duration(r.TTL) * time.Second
+	switch r.Type {
+	case "A", "AAAA":
+		addr, err := netip.ParseAddr(r.Content)
+		if err != nil {
+			return libdns.Address{}, fmt.Errorf("invalid IP address %q: %v", r.Data, err)
+		}
+		return libdns.Address{
+			Name: name,
+			TTL:  ttl,
+			IP:   addr,
+		}, nil
+	case "CAA":
+		// NOTE: CAA records from Cloudflare have a `r.Content` that can be
+		// parsed by [libdns.RR.Parse], but all the data we need is already sent
+		// to us in a structured format by Cloudflare, so we use that instead.
+		return libdns.CAA{
+			Name:  name,
+			TTL:   ttl,
+			Flags: uint8(r.Data.Flags),
+			Tag:   r.Data.Tag,
+			Value: r.Data.Value,
+		}, nil
+	case "CNAME":
+		return libdns.CNAME{
+			Name:   name,
+			TTL:    ttl,
+			Target: r.Content,
+		}, nil
+	case "MX":
+		return libdns.MX{
+			Name:       name,
+			TTL:        ttl,
+			Preference: r.Priority,
+			Target:     r.Content,
+		}, nil
+	case "NS":
+		return libdns.NS{
+			Name:   name,
+			TTL:    ttl,
+			Target: r.Content,
+		}, nil
+	case "SRV":
+		parts := strings.SplitN(name, ".", 3)
+		if len(parts) < 3 {
+			return libdns.SRV{}, fmt.Errorf("name %v does not contain enough fields; expected format: '_service._proto.name'", name)
+		}
+		return libdns.SRV{
+			Service:   strings.TrimPrefix(parts[0], "_"),
+			Transport: strings.TrimPrefix(parts[1], "_"),
+			Name:      parts[2],
+			TTL:       ttl,
+			Priority:  r.Data.Priority,
+			Weight:    r.Data.Weight,
+			Port:      r.Data.Port,
+			Target:    r.Data.Target,
+		}, nil
+	case "TXT":
+		return libdns.TXT{
+			Name: name,
+			TTL:  ttl,
+			Text: r.Content,
+		}, nil
+	// NOTE: HTTPS records from Cloudflare have a `r.Content` that can be
+	// parsed by [libdns.RR.Parse] so that is what we do here. While we are
+	// provided with structured data, it still requires a bit of parsing
+	// that would end up duplicating the code from libdns anyways.
+	// case "HTTPS", "SVCB":
+	// 	fallthrough
+	default:
+		return libdns.RR{
+			Name: name,
+			TTL:  ttl,
+			Type: r.Type,
+			Data: r.Content,
+		}.Parse()
+	}
 }
 
 func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {

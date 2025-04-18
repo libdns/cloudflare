@@ -3,7 +3,6 @@ package cloudflare
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 
@@ -49,7 +48,6 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 		}
 		recs = append(recs, libdnsRec)
 	}
-	log.Printf("GOT RECORDS: %#v", recs)
 
 	return recs, nil
 }
