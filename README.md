@@ -42,8 +42,8 @@ p := cloudflare.Provider{
 // With Custom HTTP Client
 p := cloudflare.Provider{
     APIToken: "apitoken",
- HTTPClient: http.Client{
-  Timeout: 10 * time.Second,
+    HTTPClient: http.Client{
+        Timeout: 10 * time.Second,
     },
 }
 ```
