@@ -21,7 +21,7 @@ type Provider struct {
 	APIToken  string `json:"api_token,omitempty"`  // API token with Zone.DNS:Write (can be scoped to single Zone if ZoneToken is also provided)
 	ZoneToken string `json:"zone_token,omitempty"` // Optional Zone:Read token (global scope)
 
-    // HTTPClient is the client used to communicate with Cloudflare.
+	// HTTPClient is the client used to communicate with Cloudflare.
 	// If nil, a default client will be used.
 	HTTPClient HTTPClient
 
