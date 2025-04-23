@@ -9,6 +9,10 @@ import (
 	"github.com/libdns/libdns"
 )
 
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // Provider implements the libdns interfaces for Cloudflare.
 // TODO: Support pagination and retries, handle rate limits.
 type Provider struct {
@@ -16,6 +20,10 @@ type Provider struct {
 	// scoped API **tokens**, NOT a global API **key**.
 	APIToken  string `json:"api_token,omitempty"`  // API token with Zone.DNS:Write (can be scoped to single Zone if ZoneToken is also provided)
 	ZoneToken string `json:"zone_token,omitempty"` // Optional Zone:Read token (global scope)
+
+    // HTTPClient is the client used to communicate with Cloudflare.
+	// If nil, a default client will be used.
+	HTTPClient HTTPClient
 
 	zones   map[string]cfZone
 	zonesMu sync.Mutex

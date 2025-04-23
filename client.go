@@ -118,6 +118,14 @@ func (p *Provider) getZoneInfo(ctx context.Context, zoneName string) (cfZone, er
 	return zones[0], nil
 }
 
+// getClient returns http client to use
+func (p *Provider) getClient() HTTPClient {
+	if p.HTTPClient == nil {
+		return http.DefaultClient
+	}
+	return p.HTTPClient
+}
+
 // doAPIRequest does the round trip, adding Authorization header if not already supplied.
 // It returns the decoded response from Cloudflare if successful; otherwise it returns an
 // error including error information from the API if applicable. If result is a
@@ -128,7 +136,7 @@ func (p *Provider) doAPIRequest(req *http.Request, result any) (cfResponse, erro
 		req.Header.Set("Authorization", "Bearer "+p.APIToken)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := p.getClient().Do(req)
 	if err != nil {
 		return cfResponse{}, err
 	}
