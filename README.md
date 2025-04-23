@@ -29,3 +29,21 @@ To clarify, do NOT use API keys, which are globally-scoped:
 DO use scoped API tokens:
 
 ![Don't use API keys](https://user-images.githubusercontent.com/1128849/81196503-5c91d800-8f7c-11ea-93cc-ad7d73420fab.png)
+
+## Example Configuration
+
+```golang
+// With Auth
+p := cloudflare.Provider{
+    APIToken: "apitoken",
+    ZoneToken: "zonetoken", // optional
+}
+
+// With Custom HTTP Client
+p := cloudflare.Provider{
+    APIToken: "apitoken",
+ HTTPClient: http.Client{
+  Timeout: 10 * time.Second,
+    },
+}
+```
