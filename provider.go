@@ -9,6 +9,10 @@ import (
 	"github.com/libdns/libdns"
 )
 
+type Httper interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // Provider implements the libdns interfaces for Cloudflare.
 // TODO: Support pagination and retries, handle rate limits.
 type Provider struct {
@@ -17,8 +21,47 @@ type Provider struct {
 	APIToken  string `json:"api_token,omitempty"`  // API token with Zone.DNS:Write (can be scoped to single Zone if ZoneToken is also provided)
 	ZoneToken string `json:"zone_token,omitempty"` // Optional Zone:Read token (global scope)
 
+	httpClient Httper
+
 	zones   map[string]cfZone
 	zonesMu sync.Mutex
+}
+
+func NewProvider(apiToken string, opts ...ProviderOpt) *Provider {
+	provider := &Provider{
+		APIToken: apiToken,
+		zones:    make(map[string]cfZone),
+		zonesMu:  sync.Mutex{},
+	}
+
+    // Apply options
+	for _, opt := range opts {
+		opt(provider)
+	}
+
+    // Set defaults if no option passed
+    if provider.httpClient == nil {
+        provider.httpClient = http.DefaultClient
+    }
+
+	return provider
+}
+
+// Options to construct provider
+type ProviderOpt func(p *Provider)
+
+// WithZoneToken allows using additional zone token for authorization
+func WithZoneToken(token string) ProviderOpt {
+	return func(p *Provider) {
+		p.ZoneToken = token
+	}
+}
+
+// WithHttpClient allows using custom http client for requests
+func WithHttpClient(h Httper) ProviderOpt {
+	return func(p *Provider) {
+		p.httpClient = h
+	}
 }
 
 // GetRecords lists all the records in the zone.

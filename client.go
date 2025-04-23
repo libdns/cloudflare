@@ -128,7 +128,7 @@ func (p *Provider) doAPIRequest(req *http.Request, result any) (cfResponse, erro
 		req.Header.Set("Authorization", "Bearer "+p.APIToken)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return cfResponse{}, err
 	}
