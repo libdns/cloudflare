@@ -47,7 +47,7 @@ func NewProvider(apiToken string, opts ...ProviderOpt) *Provider {
 	return provider
 }
 
-// Options to construct provider
+// ProviderOpt are options to construct provider
 type ProviderOpt func(p *Provider)
 
 // WithZoneToken allows using additional zone token for authorization
