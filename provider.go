@@ -23,7 +23,7 @@ type Provider struct {
 
 	// HTTPClient is the client used to communicate with Cloudflare.
 	// If nil, a default client will be used.
-	HTTPClient HTTPClient
+    HTTPClient HTTPClient `json:"-"`
 
 	zones   map[string]cfZone
 	zonesMu sync.Mutex
