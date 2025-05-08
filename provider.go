@@ -21,6 +21,13 @@ type Provider struct {
 	APIToken  string `json:"api_token,omitempty"`  // API token with Zone.DNS:Write (can be scoped to single Zone if ZoneToken is also provided)
 	ZoneToken string `json:"zone_token,omitempty"` // Optional Zone:Read token (global scope)
 
+	// Traditional API key authentication
+	AuthEmail string `json:"auth_email,omitempty"` // Email address associated with Cloudflare account
+	AuthKey   string `json:"auth_key,omitempty"`   // Global API key (consider using token-based auth instead when possible)
+
+	// BaseURL allows overriding the API endpoint
+	BaseURL string `json:"base_url,omitempty"` // Custom base URL for Cloudflare API
+
 	// HTTPClient is the client used to communicate with Cloudflare.
 	// If nil, a default client will be used.
 	HTTPClient HTTPClient `json:"-"`
@@ -36,7 +43,7 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 		return nil, err
 	}
 
-	reqURL := fmt.Sprintf("%s/zones/%s/dns_records", baseURL, zoneInfo.ID)
+	reqURL := fmt.Sprintf("%s/zones/%s/dns_records", p.getBaseURL(), zoneInfo.ID)
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, err
@@ -100,7 +107,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 		}
 
 		for _, cfRec := range exactMatches {
-			reqURL := fmt.Sprintf("%s/zones/%s/dns_records/%s", baseURL, zoneInfo.ID, cfRec.ID)
+			reqURL := fmt.Sprintf("%s/zones/%s/dns_records/%s", p.getBaseURL(), zoneInfo.ID, cfRec.ID)
 			req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 			if err != nil {
 				return nil, err
