@@ -59,13 +59,16 @@ func (p *Provider) updateRecord(ctx context.Context, oldRec, newRec cfDNSRecord)
 }
 
 func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdns.Record, matchContent bool) ([]cfDNSRecord, error) {
-	rr := rec.RR()
+	rr, err := cloudflareRecord(rec)
+	if err != nil {
+		return nil, err
+	}
 
 	qs := make(url.Values)
 	qs.Set("type", rr.Type)
 	qs.Set("name", libdns.AbsoluteName(rr.Name, zoneInfo.Name))
 	if matchContent {
-		qs.Set("content", rr.Data)
+		qs.Set("content", rr.Content)
 	}
 
 	reqURL := fmt.Sprintf("%s/zones/%s/dns_records?%s", baseURL, zoneInfo.ID, qs.Encode())
