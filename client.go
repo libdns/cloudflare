@@ -65,7 +65,7 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	qs.Set("type", rr.Type)
 	qs.Set("name", libdns.AbsoluteName(rr.Name, zoneInfo.Name))
 	if matchContent {
-		qs.Set("content", rr.Data)
+		qs.Set("content.exact", rr.Data)
 	}
 
 	reqURL := fmt.Sprintf("%s/zones/%s/dns_records?%s", baseURL, zoneInfo.ID, qs.Encode())
