@@ -38,13 +38,13 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 	}
 
 	page := 1
-	perPage := 100 // Maximum allowed by Cloudflare API
+	const maxPageSize = 100
 
 	var allRecords []cfDNSRecord
 	for {
 		qs := make(url.Values)
 		qs.Set("page", fmt.Sprintf("%d", page))
-		qs.Set("per_page", fmt.Sprintf("%d", perPage))
+		qs.Set("per_page", fmt.Sprintf("%d", maxPageSize))
 		reqURL := fmt.Sprintf("%s/zones/%s/dns_records?%s", baseURL, zoneInfo.ID, qs.Encode())
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
