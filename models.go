@@ -231,8 +231,8 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 	}
 	switch rec := r.(type) {
 	case libdns.TXT:
+		// If the content is not wrapped in quotes, wrap the content in double quotes
 		if !(strings.HasPrefix(cfRec.Content, `"`) && strings.HasSuffix(cfRec.Content, `"`)) {
-			// If the content is not wrapped in quotes, wrap the content in double quotes
 			cfRec.Content = fmt.Sprintf("%q", cfRec.Content)
 		}
 	case libdns.SRV:
