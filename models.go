@@ -181,10 +181,15 @@ func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 			Target:    r.Data.Target,
 		}, nil
 	case "TXT":
+		content := r.Content
+		// If the content is wrapped in quotes, remove them
+		if strings.HasPrefix(r.Content, `"`) && strings.HasSuffix(r.Content, `"`) {
+			content = strings.TrimPrefix(strings.TrimSuffix(r.Content, `"`), `"`)
+		}
 		return libdns.TXT{
 			Name: name,
 			TTL:  ttl,
-			Text: strings.TrimPrefix(strings.TrimSuffix(r.Content, `"`), `"`),
+			Text: content,
 		}, nil
 	// NOTE: HTTPS records from Cloudflare have a `r.Content` that can be
 	// parsed by [libdns.RR.Parse] so that is what we do here. While we are
@@ -227,7 +232,8 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 	switch rec := r.(type) {
 	case libdns.TXT:
 		if !(strings.HasPrefix(cfRec.Content, `"`) && strings.HasSuffix(cfRec.Content, `"`)) {
-			cfRec.Content = fmt.Sprintf(`"%s"`, cfRec.Content)
+			// If the content is not wrapped in quotes, wrap the content in double quotes
+			cfRec.Content = fmt.Sprintf("%q", cfRec.Content)
 		}
 	case libdns.SRV:
 		cfRec.Data.Service = "_" + rec.Service
