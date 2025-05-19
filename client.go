@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/libdns/libdns"
 )
@@ -67,8 +68,20 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	qs := make(url.Values)
 	qs.Set("type", rr.Type)
 	qs.Set("name", libdns.AbsoluteName(rr.Name, zoneInfo.Name))
+
+	var unquotedContent string
 	if matchContent {
-		qs.Set("content", rr.Content)
+		if rr.Type == "TXT" {
+			unquotedContent = rr.Content
+			// For backward compatibility, remove the quotes to search with "contains"
+			if strings.HasPrefix(unquotedContent, `"`) && strings.HasSuffix(unquotedContent, `"`) {
+				unquotedContent = strings.TrimPrefix(strings.TrimSuffix(unquotedContent, `"`), `"`)
+			}
+			// Use contains to return both quoted and unquoted content
+			qs.Set("content.contains", unquotedContent)
+		} else {
+			qs.Set("content.exact", rr.Content)
+		}
 	}
 
 	reqURL := fmt.Sprintf("%s/zones/%s/dns_records?%s", baseURL, zoneInfo.ID, qs.Encode())
@@ -79,6 +92,26 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 
 	var results []cfDNSRecord
 	_, err = p.doAPIRequest(req, &results)
+
+	// For backward compatibility handle both quoted and unquoted content
+	if matchContent && rr.Type == "TXT" {
+		for i := 0; i < len(results); i++ {
+			// Prefer exact quoted content
+			if results[i].Content == rr.Content {
+				return []cfDNSRecord{results[i]}, nil
+			}
+		}
+
+		for i := 0; i < len(results); i++ {
+			// Using exact unquoted content is acceptable
+			if results[i].Content == unquotedContent {
+				return []cfDNSRecord{results[i]}, nil
+			}
+		}
+
+		return []cfDNSRecord{}, nil
+	}
+
 	return results, err
 }
 
