@@ -69,16 +69,13 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	qs.Set("type", rr.Type)
 	qs.Set("name", libdns.AbsoluteName(rr.Name, zoneInfo.Name))
 
-	var unquotedContent string
+	var unwrappedContent string
 	if matchContent {
 		if rr.Type == "TXT" {
-			unquotedContent = rr.Content
-			// For backward compatibility, remove the quotes to search with "contains"
-			if strings.HasPrefix(unquotedContent, `"`) && strings.HasSuffix(unquotedContent, `"`) {
-				unquotedContent = strings.TrimPrefix(strings.TrimSuffix(unquotedContent, `"`), `"`)
-			}
-			// Use contains to return both quoted and unquoted content
-			qs.Set("content.contains", unquotedContent)
+			// Support both quoted and unquoted content
+			unwrappedContent = unwrapContent(rr.Content)
+			// Use the contains (wildcard) search with unquoted content to return both quoted and unquoted content
+			qs.Set("content.contains", unwrappedContent)
 		} else {
 			qs.Set("content.exact", rr.Content)
 		}
@@ -93,7 +90,7 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	var results []cfDNSRecord
 	_, err = p.doAPIRequest(req, &results)
 
-	// For backward compatibility handle both quoted and unquoted content
+	// Since the TXT search used contains (wildcard), check for exact matches
 	if matchContent && rr.Type == "TXT" {
 		for i := 0; i < len(results); i++ {
 			// Prefer exact quoted content
@@ -104,7 +101,7 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 
 		for i := 0; i < len(results); i++ {
 			// Using exact unquoted content is acceptable
-			if results[i].Content == unquotedContent {
+			if results[i].Content == unwrappedContent {
 				return []cfDNSRecord{results[i]}, nil
 			}
 		}
@@ -203,3 +200,17 @@ func (p *Provider) doAPIRequest(req *http.Request, result any) (cfResponse, erro
 }
 
 const baseURL = "https://api.cloudflare.com/client/v4"
+
+func unwrapContent(content string) string {
+	if strings.HasPrefix(content, `"`) && strings.HasSuffix(content, `"`) {
+		content = strings.TrimPrefix(strings.TrimSuffix(content, `"`), `"`)
+	}
+	return content
+}
+
+func wrapContent(content string) string {
+	if !strings.HasPrefix(content, `"`) && !strings.HasSuffix(content, `"`) {
+		content = fmt.Sprintf("%q", content)
+	}
+	return content
+}
