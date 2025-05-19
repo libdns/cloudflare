@@ -72,7 +72,6 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	var unwrappedContent string
 	if matchContent {
 		if rr.Type == "TXT" {
-			// Support both quoted and unquoted content
 			unwrappedContent = unwrapContent(rr.Content)
 			// Use the contains (wildcard) search with unquoted content to return both quoted and unquoted content
 			qs.Set("content.contains", unwrappedContent)
