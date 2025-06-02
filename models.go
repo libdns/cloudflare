@@ -227,9 +227,6 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 		Content: rr.Data,
 	}
 	switch rec := r.(type) {
-	case libdns.TXT:
-		// wrap the content in quotes
-		cfRec.Content = wrapContent(cfRec.Content)
 	case libdns.SRV:
 		cfRec.Data.Service = "_" + rec.Service
 		cfRec.Data.Priority = rec.Priority
@@ -246,6 +243,10 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 	}
 	if rr.Type == "CNAME" && strings.HasSuffix(cfRec.Content, ".cfargotunnel.com") {
 		cfRec.Proxied = true
+	}
+	if rr.Type == "TXT" {
+		// wrap the content in quotes
+		cfRec.Content = wrapContent(cfRec.Content)
 	}
 	return cfRec, nil
 }
