@@ -166,9 +166,9 @@ func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 			Target: r.Content,
 		}, nil
 	case "SRV":
-		parts := strings.SplitN(name, ".", 3)
+		parts := strings.SplitN(r.Name, ".", 3)
 		if len(parts) < 3 {
-			return libdns.SRV{}, fmt.Errorf("name %v does not contain enough fields; expected format: '_service._proto.name'", name)
+			return libdns.SRV{}, fmt.Errorf("name %v does not contain enough fields; expected format: '_service._proto.name'", r.Name)
 		}
 		return libdns.SRV{
 			Service:   strings.TrimPrefix(parts[0], "_"),
