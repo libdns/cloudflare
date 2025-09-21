@@ -75,7 +75,9 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 			unwrappedContent = unwrapContent(rr.Content)
 			// Use the contains (wildcard) search with unquoted content to return both quoted and unquoted content
 			qs.Set("content.contains", unwrappedContent)
-		} else {
+		} else if rr.Type != "SRV" && rr.Type != "HTTPS" && rr.Type != "SVCB" {
+			// SRV, HTTPS, SVCB records don't support content.exact filtering in Cloudflare API
+			// They will be matched by type and name only
 			qs.Set("content.exact", rr.Content)
 		}
 	}

@@ -96,7 +96,7 @@ type cfDNSRecord struct {
 		Tag string `json:"tag"`
 
 		// CAA, DNSKEY
-		Flags int `json:"flags,omitempty"`
+		Flags *int `json:"flags,omitempty"`
 		// DNSKEY
 		Protocol  int `json:"protocol,omitempty"`
 		Algorithm int `json:"algorithm,omitempty"`
@@ -121,6 +121,14 @@ type cfDNSRecord struct {
 	} `json:"meta,omitempty"`
 }
 
+// ensureTrailingDot adds a trailing dot if not present
+func ensureTrailingDot(s string) string {
+	if s != "" && !strings.HasSuffix(s, ".") {
+		return s + "."
+	}
+	return s
+}
+
 func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 	name := libdns.RelativeName(r.Name, zone)
 	ttl := time.Duration(r.TTL) * time.Second
@@ -128,7 +136,7 @@ func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 	case "A", "AAAA":
 		addr, err := netip.ParseAddr(r.Content)
 		if err != nil {
-			return libdns.Address{}, fmt.Errorf("invalid IP address %q: %v", r.Data, err)
+			return libdns.Address{}, fmt.Errorf("invalid IP address %q: %v", r.Content, err)
 		}
 		return libdns.Address{
 			Name: name,
@@ -139,47 +147,56 @@ func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 		// NOTE: CAA records from Cloudflare have a `r.Content` that can be
 		// parsed by [libdns.RR.Parse], but all the data we need is already sent
 		// to us in a structured format by Cloudflare, so we use that instead.
+		flags := uint8(0)
+		if r.Data.Flags != nil {
+			flags = uint8(*r.Data.Flags)
+		}
 		return libdns.CAA{
 			Name:  name,
 			TTL:   ttl,
-			Flags: uint8(r.Data.Flags),
+			Flags: flags,
 			Tag:   r.Data.Tag,
 			Value: r.Data.Value,
 		}, nil
 	case "CNAME":
+		// Cloudflare treats all CNAME targets as FQDNs and adds trailing dots during DNS resolution.
+		// We need to add the trailing dot here to match what actually gets resolved in DNS.
+		target := ensureTrailingDot(r.Content)
 		return libdns.CNAME{
 			Name:   name,
 			TTL:    ttl,
-			Target: r.Content,
+			Target: target,
 		}, nil
 	case "MX":
+		target := ensureTrailingDot(r.Content)
 		return libdns.MX{
 			Name:       name,
 			TTL:        ttl,
 			Preference: r.Priority,
-			Target:     r.Content,
+			Target:     target,
 		}, nil
 	case "NS":
+		target := ensureTrailingDot(r.Content)
 		return libdns.NS{
 			Name:   name,
 			TTL:    ttl,
-			Target: r.Content,
+			Target: target,
 		}, nil
 	case "SRV":
-		parts := strings.SplitN(r.Name, ".", 3)
-		if len(parts) < 3 {
-			return libdns.SRV{}, fmt.Errorf("name %v does not contain enough fields; expected format: '_service._proto.name'", r.Name)
+		// NOTE: Cloudflare's Content field for SRV records is incomplete - it only contains
+		// "weight port target" and omits the priority field. We construct the complete
+		// data string from structured fields and use libdns's built-in parsing.
+		target := ensureTrailingDot(r.Data.Target)
+		data := fmt.Sprintf("%d %d %d %s", r.Data.Priority, r.Data.Weight, r.Data.Port, target)
+
+		// Use libdns's built-in parsing
+		rr := libdns.RR{
+			Name: name,
+			TTL:  ttl,
+			Type: "SRV",
+			Data: data,
 		}
-		return libdns.SRV{
-			Service:   strings.TrimPrefix(parts[0], "_"),
-			Transport: strings.TrimPrefix(parts[1], "_"),
-			Name:      parts[2],
-			TTL:       ttl,
-			Priority:  r.Data.Priority,
-			Weight:    r.Data.Weight,
-			Port:      r.Data.Port,
-			Target:    r.Data.Target,
-		}, nil
+		return rr.Parse()
 	case "TXT":
 		// unwrap the quotes from the content
 		unwrappedContent := unwrapContent(r.Content)
@@ -219,14 +236,35 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 	// And of course there's no real good venue to file a bug report:
 	// https://community.cloudflare.com/t/creating-srv-record-with-content-string-instead-of-individual-component-fields/781178?u=mholt
 	rr := r.RR()
+	content := rr.Data
+	// Cloudflare API is inconsistent with trailing dots:
+	// - It ACCEPTS targets with trailing dots when creating
+	// - It RETURNS targets with trailing dots when fetching
+	// - But it DOESN'T MATCH them for deletion if we send trailing dots
+	// So we must strip them when sending to the API
+	if rr.Type == "CNAME" || rr.Type == "NS" || rr.Type == "MX" {
+		content = strings.TrimSuffix(content, ".")
+	}
 	cfRec := cfDNSRecord{
 		// ID:   r.ID,
 		Name:    rr.Name,
 		Type:    rr.Type,
 		TTL:     int(rr.TTL.Seconds()),
-		Content: rr.Data,
+		Content: content,
 	}
 	switch rec := r.(type) {
+	case libdns.CAA:
+		flags := int(rec.Flags)
+		cfRec.Data.Flags = &flags
+		cfRec.Data.Tag = rec.Tag
+		cfRec.Data.Value = rec.Value
+		// Use RR().Data which properly formats the content field
+		cfRec.Content = rec.RR().Data
+	case libdns.MX:
+		cfRec.Priority = rec.Preference
+		// Content should be just the target, not include priority
+		// Must strip trailing dot for Cloudflare API
+		cfRec.Content = strings.TrimSuffix(rec.Target, ".")
 	case libdns.SRV:
 		cfRec.Data.Service = "_" + rec.Service
 		cfRec.Data.Priority = rec.Priority
@@ -235,11 +273,22 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 		cfRec.Data.Name = rec.Name
 		cfRec.Data.Port = rec.Port
 		cfRec.Data.Target = rec.Target
+		// Use the RR.Name() which already constructs the proper format
+		cfRec.Name = rec.RR().Name
+		// Note: We don't set Content field for SRV as Cloudflare uses structured data fields
+		// and doesn't seem to support content.exact filtering for SRV records anyway
+		// for the same reason we can avoid dealing with dots in Target
 	case libdns.ServiceBinding:
-		cfRec.Name = rec.Name
+		// Get the RR representation which handles name construction
+		rr := rec.RR()
+		cfRec.Name = rr.Name
+		cfRec.Type = rr.Type // This will be either "HTTPS" or "SVCB"
 		cfRec.Data.Priority = rec.Priority
 		cfRec.Data.Target = rec.Target
 		cfRec.Data.Value = rec.Params.String()
+		// Note: We don't set Content field for HTTPS/SVCB as Cloudflare uses structured data fields
+		// and doesn't seem to support content.exact filtering for these record types anyway
+		// for the same reason we can avoid dealing with dots in Target
 	}
 	if rr.Type == "CNAME" && strings.HasSuffix(cfRec.Content, ".cfargotunnel.com") {
 		cfRec.Proxied = true
