@@ -203,10 +203,35 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 	return results, nil
 }
 
+// ListZones lists all the zones in the account.
+func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/zones", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfZones []cfZone
+	_, err = p.doAPIRequest(req, &cfZones)
+	if err != nil {
+		return nil, err
+	}
+
+	zones := make([]libdns.Zone, len(cfZones))
+	for i, cfZone := range cfZones {
+		zones[i] = libdns.Zone{
+			// Add trailing dot to make it a FQDN
+			Name: cfZone.Name + ".",
+		}
+	}
+
+	return zones, nil
+}
+
 // Interface guards
 var (
 	_ libdns.RecordGetter   = (*Provider)(nil)
 	_ libdns.RecordAppender = (*Provider)(nil)
 	_ libdns.RecordSetter   = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
+	_ libdns.ZoneLister     = (*Provider)(nil)
 )
