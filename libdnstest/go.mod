@@ -1,6 +1,6 @@
 module github.com/libdns/cloudflare/libdnstest
 
-go 1.18
+go 1.23
 
 require (
 	github.com/libdns/cloudflare v1.1.0
