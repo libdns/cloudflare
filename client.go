@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/libdns/libdns"
 )
@@ -69,15 +68,12 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	qs.Set("type", rr.Type)
 	qs.Set("name", libdns.AbsoluteName(rr.Name, zoneInfo.Name))
 
-	var unwrappedContent string
 	if matchContent {
-		if rr.Type == "TXT" {
-			unwrappedContent = unwrapContent(rr.Content)
-			// Use the contains (wildcard) search with unquoted content to return both quoted and unquoted content
-			qs.Set("content.contains", unwrappedContent)
-		} else if rr.Type != "SRV" && rr.Type != "HTTPS" && rr.Type != "SVCB" {
-			// SRV, HTTPS, SVCB records don't support content.exact filtering in Cloudflare API
-			// They will be matched by type and name only
+		// TXT is matched client-side by decoded value (below): Cloudflare
+		// re-chunks and re-escapes stored TXT presentation, so neither
+		// content.exact nor content.contains reliably matches our encoding.
+		// SRV, HTTPS, SVCB don't support content.exact filtering at all.
+		if rr.Type != "TXT" && rr.Type != "SRV" && rr.Type != "HTTPS" && rr.Type != "SVCB" {
 			qs.Set("content.exact", rr.Content)
 		}
 	}
@@ -89,28 +85,34 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	}
 
 	var results []cfDNSRecord
-	_, err = p.doAPIRequest(req, &results)
-
-	// Since the TXT search used contains (wildcard), check for exact matches
-	if matchContent && rr.Type == "TXT" {
-		for i := 0; i < len(results); i++ {
-			// Prefer exact quoted content
-			if results[i].Content == rr.Content {
-				return []cfDNSRecord{results[i]}, nil
-			}
-		}
-
-		for i := 0; i < len(results); i++ {
-			// Using exact unquoted content is acceptable
-			if results[i].Content == unwrappedContent {
-				return []cfDNSRecord{results[i]}, nil
-			}
-		}
-
-		return []cfDNSRecord{}, nil
+	if _, err = p.doAPIRequest(req, &results); err != nil {
+		return nil, err
 	}
 
-	return results, err
+	// Match TXT by decoded value, since Cloudflare's stored presentation need
+	// not equal what we sent.
+	if matchContent && rr.Type == "TXT" {
+		want := rec.RR().Data
+		var matched []cfDNSRecord
+		for _, cand := range results {
+			// Per the libdns RecordDeleter contract, an empty value matches any
+			// value for the given name+type.
+			if want == "" {
+				matched = append(matched, cand)
+				continue
+			}
+			got, decErr := decodeTXT(cand.Content)
+			if decErr != nil {
+				return nil, fmt.Errorf("decoding TXT content %q: %v", cand.Content, decErr)
+			}
+			if got == want {
+				matched = append(matched, cand)
+			}
+		}
+		return matched, nil
+	}
+
+	return results, nil
 }
 
 func (p *Provider) getZoneInfo(ctx context.Context, zoneName string) (cfZone, error) {
@@ -201,17 +203,3 @@ func (p *Provider) doAPIRequest(req *http.Request, result any) (cfResponse, erro
 }
 
 const baseURL = "https://api.cloudflare.com/client/v4"
-
-func unwrapContent(content string) string {
-	if strings.HasPrefix(content, `"`) && strings.HasSuffix(content, `"`) {
-		content = strings.TrimPrefix(strings.TrimSuffix(content, `"`), `"`)
-	}
-	return content
-}
-
-func wrapContent(content string) string {
-	if !strings.HasPrefix(content, `"`) && !strings.HasSuffix(content, `"`) {
-		content = fmt.Sprintf("%q", content)
-	}
-	return content
-}

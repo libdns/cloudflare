@@ -198,12 +198,14 @@ func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 		}
 		return rr.Parse()
 	case "TXT":
-		// unwrap the quotes from the content
-		unwrappedContent := unwrapContent(r.Content)
+		text, err := decodeTXT(r.Content)
+		if err != nil {
+			return libdns.TXT{}, fmt.Errorf("decoding TXT content %q: %v", r.Content, err)
+		}
 		return libdns.TXT{
 			Name: name,
 			TTL:  ttl,
-			Text: unwrappedContent,
+			Text: text,
 		}, nil
 	// NOTE: HTTPS records from Cloudflare have a `r.Content` that can be
 	// parsed by [libdns.RR.Parse] so that is what we do here. While we are
@@ -294,8 +296,7 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 		cfRec.Proxied = true
 	}
 	if rr.Type == "TXT" {
-		// wrap the content in quotes
-		cfRec.Content = wrapContent(cfRec.Content)
+		cfRec.Content = encodeTXT(rr.Data)
 	}
 	return cfRec, nil
 }

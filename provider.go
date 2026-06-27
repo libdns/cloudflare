@@ -60,8 +60,12 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 
 		allRecords = append(allRecords, pageRecords...)
 
+		// Guard a nil ResultInfo and a zero PerPage before the division below.
+		if response.ResultInfo == nil || response.ResultInfo.PerPage == 0 || len(pageRecords) == 0 {
+			break
+		}
 		lastPage := (response.ResultInfo.TotalCount + response.ResultInfo.PerPage - 1) / response.ResultInfo.PerPage
-		if response.ResultInfo == nil || page >= lastPage || len(pageRecords) == 0 {
+		if page >= lastPage {
 			break
 		}
 
