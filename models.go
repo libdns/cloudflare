@@ -56,7 +56,7 @@ type cfDNSRecord struct {
 	Type       string    `json:"type,omitempty"`
 	Name       string    `json:"name,omitempty"`
 	Content    string    `json:"content,omitempty"`
-	Priority   uint16    `json:"priority,omitempty"`
+	Priority   *uint16   `json:"priority,omitempty"` // MX only; 0 is a valid preference
 	Proxiable  bool      `json:"proxiable,omitempty"`
 	Proxied    bool      `json:"proxied,omitempty"`
 	TTL        int       `json:"ttl,omitempty"` // seconds
@@ -81,12 +81,14 @@ type cfDNSRecord struct {
 		PrecisionVert int    `json:"precision_vert,omitempty"`
 
 		// SRV, HTTPS
+		// Priority, Weight and Port have no omitempty: 0 is a valid (and
+		// common) value, and Cloudflare rejects SRV records that omit them.
 		Service  string `json:"service,omitempty"`
 		Proto    string `json:"proto,omitempty"`
 		Name     string `json:"name,omitempty"`
-		Priority uint16 `json:"priority,omitempty"`
-		Weight   uint16 `json:"weight,omitempty"`
-		Port     uint16 `json:"port,omitempty"`
+		Priority uint16 `json:"priority"`
+		Weight   uint16 `json:"weight"`
+		Port     uint16 `json:"port"`
 		Target   string `json:"target,omitempty"`
 
 		// CAA, SRV, HTTPS
@@ -172,7 +174,7 @@ func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 		return libdns.MX{
 			Name:       name,
 			TTL:        ttl,
-			Preference: r.Priority,
+			Preference: r.mxPreference(),
 			Target:     target,
 		}, nil
 	case "NS":
@@ -223,6 +225,14 @@ func (r cfDNSRecord) libdnsRecord(zone string) (libdns.Record, error) {
 	}
 }
 
+// mxPreference returns the record's MX preference, or 0 if it has none.
+func (r cfDNSRecord) mxPreference() uint16 {
+	if r.Priority == nil {
+		return 0
+	}
+	return *r.Priority
+}
+
 func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 	// Super annoyingly, the Cloudflare API says that a "Content"
 	// field can contain the record data as a string, and that the
@@ -263,7 +273,8 @@ func cloudflareRecord(r libdns.Record) (cfDNSRecord, error) {
 		// Use RR().Data which properly formats the content field
 		cfRec.Content = rec.RR().Data
 	case libdns.MX:
-		cfRec.Priority = rec.Preference
+		pref := rec.Preference
+		cfRec.Priority = &pref
 		// Content should be just the target, not include priority
 		// Must strip trailing dot for Cloudflare API
 		cfRec.Content = strings.TrimSuffix(rec.Target, ".")
