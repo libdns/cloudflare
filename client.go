@@ -68,7 +68,8 @@ func (p *Provider) getDNSRecords(ctx context.Context, zoneInfo cfZone, rec libdn
 	qs.Set("type", rr.Type)
 	qs.Set("name", libdns.AbsoluteName(rr.Name, zoneInfo.Name))
 
-	if matchContent {
+	// An empty value should matches every value for the given type+name, so no content filter applied
+	if matchContent && rec.RR().Data != "" {
 		// TXT is matched client-side by decoded value (below): Cloudflare
 		// re-chunks and re-escapes stored TXT presentation, so neither
 		// content.exact nor content.contains reliably matches our encoding.

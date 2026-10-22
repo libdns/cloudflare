@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"path"
 	"testing"
 
 	"github.com/libdns/libdns"
@@ -96,4 +97,67 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// Records every request as "<METHOD> <id-or-query>"
+type recordingClient struct {
+	list     string
+	requests []string
+}
+
+func (c *recordingClient) Do(req *http.Request) (*http.Response, error) {
+	id := path.Base(req.URL.Path)
+	var result string
+	switch req.Method {
+	case http.MethodGet:
+		c.requests = append(c.requests, "GET "+req.URL.RawQuery)
+		result = c.list
+	case http.MethodDelete:
+		c.requests = append(c.requests, "DELETE "+id)
+		result = `{"id":"` + id + `"}`
+	}
+	return &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(bytes.NewBufferString(`{"success":true,"result":` + result + `}`)),
+		Header:     make(http.Header),
+	}, nil
+}
+
+func newRecordingProvider(list string) (*Provider, *recordingClient) {
+	client := &recordingClient{list: list}
+	p := &Provider{
+		APIToken:   "test",
+		HTTPClient: client,
+		zones:      map[string]cfZone{"example.com.": {ID: "zone123", Name: "example.com"}},
+	}
+	return p, client
+}
+
+const threeARecords = `[` +
+	`{"id":"a","type":"A","name":"foo.example.com","content":"192.0.2.1"},` +
+	`{"id":"b","type":"A","name":"foo.example.com","content":"192.0.2.2"},` +
+	`{"id":"c","type":"A","name":"foo.example.com","content":"192.0.2.3"}` +
+	`]`
+
+func TestDeleteRecordsEmptyValueDeletesAll(t *testing.T) {
+	p, client := newRecordingProvider(threeARecords)
+
+	deleted, err := p.DeleteRecords(context.Background(), "example.com.", []libdns.Record{
+		libdns.RR{Name: "foo", Type: "A"},
+	})
+	if err != nil {
+		t.Fatalf("DeleteRecords: %v", err)
+	}
+	if len(deleted) != 3 {
+		t.Fatalf("want 3 deleted records, got %d", len(deleted))
+	}
+	want := []string{
+		"GET name=foo.example.com&type=A", // no content.exact filter
+		"DELETE a",
+		"DELETE b",
+		"DELETE c",
+	}
+	if !equalStrings(client.requests, want) {
+		t.Fatalf("want requests %q, got %q", want, client.requests)
+	}
 }
